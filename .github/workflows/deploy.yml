@@ -57,6 +57,8 @@ jobs:
   quality:
     name: Lint, tests, bundle validate
     runs-on: ubuntu-latest
+    env:
+      HAS_SP: ${{ secrets.DATABRICKS_CLIENT_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -78,7 +80,7 @@ jobs:
         uses: databricks/setup-cli@v1
 
       - name: Bundle validate (dev)
-        if: secrets.DATABRICKS_CLIENT_ID != ''
+        if: env.HAS_SP == 'true'
         working-directory: src/databricks
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
@@ -90,14 +92,28 @@ jobs:
     name: Deploy (${{ matrix.target }})
     needs: quality
     runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch')
     strategy:
       matrix:
         target: [dev, acc, prd]
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.target == 'dev') ||
-      (github.event_name == 'workflow_dispatch' && matrix.target == github.event.inputs.target)
+        include:
+          - target: dev
+            should_run: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          - target: acc
+            should_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'acc' }}
+          - target: prd
+            should_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'prd' }}
+      fail-fast: false
     steps:
       - uses: actions/checkout@v4
+
+      - name: Skip if not selected
+        if: matrix.should_run != 'true'
+        run: |
+          echo "Skipping ${{ matrix.target }} for this trigger"
+          exit 0
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
@@ -116,7 +132,7 @@ jobs:
         run: databricks bundle deploy --target ${{ matrix.target }}
 
       - name: Trigger web-ingestion-pipeline
-        if: github.event_name == 'workflow_dispatch' && inputs.run_pipeline_after_deploy && matrix.target == inputs.target
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_pipeline_after_deploy == 'true'
         working-directory: src/databricks
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
