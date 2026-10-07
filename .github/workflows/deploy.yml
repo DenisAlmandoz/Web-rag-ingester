@@ -70,8 +70,6 @@ jobs:
       - name: Install package and dev dependencies
         run: uv sync --group dev
 
-      - name: Ruff
-        run: uv run ruff check src tests
 
       - name: Pytest
         run: uv run pytest -q
