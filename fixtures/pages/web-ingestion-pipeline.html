@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Building a web ingestion pipeline for RAG</title>
+  <meta name="description" content="Search, fetch, parse, clean, chunk: five stages from web pages to RAG-ready documents.">
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/guides">Guides</a>
+    <a href="/guides/web-ingestion-pipeline">This page</a>
+    <a href="/login">Log in</a>
+  </nav>
+
+  <article>
+    <h1>Building a web ingestion pipeline for RAG</h1>
+    <p>Web pages are the largest open corpus available for retrieval-augmented generation,
+    and also the messiest. Unlike a curated PDF corpus, every page brings its own markup,
+    navigation chrome, cookie banners and paywall teasers. An ingestion pipeline exists to
+    turn that mess into stable documents.</p>
+
+    <h2>Stage 1 — Search</h2>
+    <p>A search API such as Tavily turns a natural language query into a ranked list of URLs
+    plus a snippet. The snippet is already useful: it tells you whether the result is worth
+    downloading, and it can be stored as provenance metadata alongside the final document.</p>
+
+    <h2>Stage 2 — Fetch</h2>
+    <p>Downloading is where production pipelines quietly fail. You need timeouts, redirect
+    following, a sane user agent, a size cap so a 200 MB video file does not land in your
+    index, and content-type detection so you know whether you received HTML, a PDF or a
+    binary blob.</p>
+
+    <h2>Stage 3 — Parse</h2>
+    <p>Parsing converts bytes into text. For HTML, a targeted extraction library will drop
+    navigation and keep the article body. For PDFs you need layout-aware models: Docling and
+    Unstructured both reconstruct reading order, section headings and table structure, which
+    a naive text dump of the PDF loses entirely.</p>
+
+    <h2>Stage 4 — Clean</h2>
+    <p>Cleaning is mostly subtraction: normalize unicode, collapse wrapped lines, delete
+    repeated menu items, remove boilerplate lines like cookie notices and copyright
+    footers. Clean text is not cosmetic — boilerplate that survives into chunks becomes
+    evidence the retriever can match, which is how answers end up quoting a footer.</p>
+
+    <h2>Stage 5 — Chunk</h2>
+    <p>Finally the document is split into retrieval units with a little overlap so a fact
+    spanning a boundary is still findable. Every chunk keeps a pointer back to its URL and
+    title, because provenance is what makes a RAG answer checkable.</p>
+
+    <h2>Putting it together</h2>
+    <p>The pipeline is a loop, not a one-shot job: search results that fail to fetch are
+    dropped, pages whose parsed text falls below a length threshold are dropped, and the
+    ones that survive are written as JSONL records ready for embedding. Measuring each
+    stage separately — results per query, fetch success rate, chars before and after
+    cleaning, chunk counts — is what tells you where quality is actually being lost.</p>
+  </article>
+
+  <footer>
+    <p>Subscribe to our newsletter</p>
+    <p>All rights reserved. Copyright © 2026 Guides Inc.</p>
+  </footer>
+</body>
+</html>

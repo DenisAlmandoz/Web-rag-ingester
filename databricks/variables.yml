@@ -1,0 +1,40 @@
+# Bundle-wide variables for the web-search-ingestion Declarative Automation Bundle.
+# Targets in databricks.yml override catalog/schema/warehouse_id per environment.
+
+variables:
+  catalog:
+    description: Unity Catalog catalog that owns the ingestion tables.
+    default: main
+  schema:
+    description: Schema inside the catalog (overridden per target).
+    default: web_ingest
+  chunks_table:
+    description: Delta table feeding the vector index (id PK, text = embedding column).
+    default: web_chunks
+  documents_table:
+    description: Per-page metadata table, joined to chunks on doc_id.
+    default: web_documents
+  vs_endpoint_name:
+    description: Vector search endpoint that hosts the index.
+    default: vector-search-web-endpoint
+  vs_index_name:
+    description: Delta-sync vector index over the chunks table.
+    default: web_chunks_index
+  embedding_model:
+    description: Serving endpoint that computes embeddings server-side during index sync.
+    default: databricks-gte-large-en
+  warehouse_id:
+    description: SQL warehouse used to write the Delta tables (set per target).
+    default: ""
+  query:
+    description: Search query for the ingestion job.
+    default: "attention is all you need transformer architecture explained"
+  parser:
+    description: baseline | trafilatura | unstructured | docling.
+    default: baseline
+  max_results:
+    description: Maximum number of URLs to ingest per run.
+    default: 5
+  schedule_pause_status:
+    description: PAUSED while developing, UNPAUSED in production.
+    default: PAUSED

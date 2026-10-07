@@ -1,0 +1,125 @@
+# Databricks Asset Bundle CI/CD (GitHub Actions)
+#
+# Required repo secrets:
+#   DATABRICKS_HOST         e.g. https://dbc-b576ddfe-9e99.cloud.databricks.com
+#   DATABRICKS_CLIENT_ID    service principal application id
+#   DATABRICKS_CLIENT_SECRET
+#
+# Bundle targets (src/databricks/databricks.yml) need real warehouse ids, and
+# the deployed jobs read the Tavily key from the Databricks secret scope
+# `web-ingest` (key `tavily_api_key`).
+#
+# Triggers:
+#   push to main            -> lint/test/validate + deploy dev
+#   pull_request to main    -> lint/test/validate only
+#   workflow_dispatch       -> deploy the chosen target (dev/acc/prd),
+#                              optionally trigger the ingestion job
+
+name: Databricks Bundle Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Databricks bundle target to deploy
+        type: choice
+        options: [dev, acc, prd]
+        default: dev
+      run_pipeline_after_deploy:
+        description: Trigger web-ingestion-pipeline after deploying (jobs read Tavily from Databricks secret scope)
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "src/web_ingestion/**"
+      - "src/databricks/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/deploy.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/web_ingestion/**"
+      - "src/databricks/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/deploy.yml"
+
+concurrency:
+  group: deploy-${{ github.event_name }}-${{ github.event.inputs.target || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint, tests, bundle validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and dev dependencies
+        run: uv sync --group dev
+
+      - name: Ruff
+        run: uv run ruff check src tests
+
+      - name: Pytest
+        run: uv run pytest -q
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@v1
+
+      - name: Bundle validate (dev)
+        if: secrets.DATABRICKS_CLIENT_ID != ''
+        working-directory: src/databricks
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+        run: databricks bundle validate --target dev
+
+  deploy:
+    name: Deploy (${{ matrix.target }})
+    needs: quality
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [dev, acc, prd]
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.target == 'dev') ||
+      (github.event_name == 'workflow_dispatch' && matrix.target == github.event.inputs.target)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@v1
+
+      - name: Build and deploy bundle to ${{ matrix.target }}
+        working-directory: src/databricks
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+        run: databricks bundle deploy --target ${{ matrix.target }}
+
+      - name: Trigger web-ingestion-pipeline
+        if: github.event_name == 'workflow_dispatch' && inputs.run_pipeline_after_deploy && matrix.target == inputs.target
+        working-directory: src/databricks
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+        run: databricks bundle run --target ${{ matrix.target }} web-ingestion-pipeline --no-wait

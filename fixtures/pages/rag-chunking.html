@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Chunking strategies for RAG systems | Acme Docs</title>
+  <meta name="description" content="Fixed-size, sentence-aware and semantic chunking compared for retrieval quality.">
+</head>
+<body>
+  <header>
+    <nav id="topnav">
+      <a href="/docs">Documentation</a>
+      <a href="/docs/quickstart">Quickstart</a>
+      <a href="/docs/api">API reference</a>
+      <a href="/blog">Blog</a>
+      <a href="/support">Support</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <aside id="sidebar">
+      <a href="/docs/ingestion">Ingestion</a>
+      <a href="/docs/embeddings">Embeddings</a>
+      <a href="/docs/chunking">Chunking</a>
+      <a href="/docs/retrieval">Retrieval</a>
+      <a href="/docs/eval">Evaluation</a>
+      <a href="/docs/chunking">Chunking</a>
+      <a href="/docs/retrieval">Retrieval</a>
+    </aside>
+
+    <main>
+      <article>
+        <h1>Chunking strategies for RAG systems</h1>
+        <p>Chunking is the step where a clean document becomes retrieval units. Get it wrong
+        and even a strong embedding model cannot recover: a chunk that cuts a definition in
+        half will not match the query it should answer.</p>
+
+        <h2>Fixed-size windows</h2>
+        <p>The simplest approach is to cut text into windows of N characters or tokens with a
+        sliding overlap. It is cheap, deterministic and surprisingly competitive when the
+        source documents already have short, self-contained paragraphs.</p>
+        <p>The failure mode is structural: a window can start in the middle of a sentence and
+        end in the middle of the next one, so the chunk no longer expresses a complete thought.
+        Overlap reduces the damage but never removes it.</p>
+
+        <h2>Sentence-aware chunking</h2>
+        <p>A better baseline respects sentence boundaries and packs whole sentences into a
+        chunk until the size budget is reached. Recall improves noticeably on technical
+        content because each chunk still reads like prose a human would write.</p>
+
+        <h2>Semantic chunking</h2>
+        <p>Semantic approaches embed consecutive sentences and split where the embedding
+        similarity drops, which means a topic change becomes a chunk boundary. It costs an
+        extra embedding pass over the corpus and adds a tuning knob, but it keeps each chunk
+        topically uniform.</p>
+
+        <h2>Overlap guidance</h2>
+        <p>For most prose, 10 to 20 percent overlap is enough. Larger overlap inflates the
+        index, duplicates evidence across chunks and can make the retriever return the same
+        passage several times, which hurts answer diversity.</p>
+
+        <h2>How to evaluate</h2>
+        <p>Build a small set of real questions with known source passages, then compare
+        chunking strategies on recall@k before touching anything else. Chunking changes the
+        distribution of what can be retrieved, and that dominates downstream answer quality
+        far more than prompt wording does.</p>
+      </article>
+    </main>
+  </div>
+
+  <footer>
+    <p>Accept all cookies · Cookie policy · Privacy policy</p>
+    <p>Copyright © 2026 Acme Docs. All rights reserved.</p>
+    <p>Toggle dark mode · Skip to main content</p>
+  </footer>
+</body>
+</html>

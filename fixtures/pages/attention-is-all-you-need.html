@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Attention Is All You Need — paper explained | Example Blog</title>
+  <meta name="description" content="A plain-English walkthrough of the Transformer architecture and self-attention.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>body { font-family: sans-serif; } .hidden { display: none; }</style>
+  <script>console.log("tracking script that must never appear in output");</script>
+</head>
+<body>
+  <div id="cookie-banner">This site uses cookies. Accept all cookies to continue. Cookie policy applies.</div>
+  <header class="site-header">
+    <nav>
+      <a href="/">Home</a>
+      <a href="/blog">Blog</a>
+      <a href="/docs">Docs</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/login">Log in</a>
+      <a href="/signup">Sign up</a>
+    </nav>
+  </header>
+
+  <main>
+    <article>
+      <h1>Attention Is All You Need — paper explained</h1>
+      <p class="byline">Published on 2017-06-12 · 12 min read</p>
+
+      <h2>Why the paper mattered</h2>
+      <p>Before 2017, nearly every state-of-the-art sequence model was built on recurrent
+      networks. RNNs process tokens one at a time, which creates two problems: the path
+      between distant tokens is long, so gradients get weak, and the sequential nature of
+      the computation prevents parallel processing of a sequence during training.</p>
+      <p>The Transformer replaces recurrence entirely with attention. Every position in the
+      sequence can attend to every other position in a single step, so the distance between
+      two tokens no longer affects how easily information flows between them.</p>
+
+      <h2>Self-attention in one paragraph</h2>
+      <p>Each token emits three vectors: a query, a key and a value. The query of one token
+      is compared against the keys of all tokens to produce a set of attention weights, and
+      those weights define a weighted sum of the values. That sum is the token's new
+      representation, enriched with context from the rest of the sequence.</p>
+      <p>Multi-head attention runs this process several times in parallel with different
+      projection matrices. One head may learn to track syntactic dependencies while another
+      tracks coreference, and the outputs of all heads are concatenated and projected back
+      into the model dimension.</p>
+
+      <h2>Positional encoding</h2>
+      <p>Because attention is permutation invariant, the model needs an explicit signal that
+      tells it where each token sits in the sequence. The original paper uses sine and
+      cosine functions of different frequencies, so that the encoding of position <em>p+k</em>
+      can be expressed as a linear function of the encoding of position <em>p</em>. Later
+      models experimented with learned absolute positions and relative position biases.</p>
+
+      <h2>What followed</h2>
+      <p>BERT, GPT, T5 and essentially every large language model since are direct
+      descendants of this architecture. The recipe scaled, it trained faster than recurrence,
+      and it turned out to be a good fit for accelerators because every token in a sequence
+      can be processed simultaneously.</p>
+    </article>
+  </main>
+
+  <aside class="sidebar">
+    <ul>
+      <li><a href="/blog">Popular posts</a></li>
+      <li><a href="/tags/transformers">Tag: transformers</a></li>
+      <li>Subscribe to our newsletter for weekly posts</li>
+    </ul>
+  </aside>
+
+  <footer>
+    <p>Subscribe to our newsletter</p>
+    <p>Copyright © 2026 Example Blog. All rights reserved.</p>
+    <p>Skip to main content · Back to top · Share this · Tweet this</p>
+  </footer>
+</body>
+</html>

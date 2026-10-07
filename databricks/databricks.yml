@@ -1,0 +1,62 @@
+# Declarative Automation Bundle for the web-search-ingestion repo.
+#
+# Two jobs, separate targets:
+#   dev  - your personal workspace root path, safe to iterate on
+#   acc  - shared "/Shared" root path, PAUSED schedule
+#   prd  - shared "/Shared" root path, UNPAUSED schedule
+#
+# Workflow:
+#   databricks bundle validate --target dev
+#   databricks bundle deploy --target dev
+#   databricks bundle run web-ingestion-pipeline --target dev
+#   databricks bundle run web-ingest-vector-index --target dev
+#
+# Prereqs on the workspace:
+#   * a running SQL warehouse id in each target (variables: warehouse_id)
+#   * a secret scope `web-ingest` with key `tavily_api_key`
+#   * a serving endpoint `databricks-gte-large-en` (embedding_model)
+
+bundle:
+  name: web-search-ingestion
+
+include:
+  - variables.yml
+  - resources/web_ingestion_pipeline.yml
+  - resources/vector_index.yml
+
+# Builds src/web_ingestion into a wheel into this bundle's dist/.
+# Jobs reference it as ../dist/*.whl from resources/*.yml.
+artifacts:
+  web-ingestion:
+    type: whl
+    path: ../..
+    build: "uv build --wheel --out-dir src/databricks/dist ."
+
+# ------------------------------------------------------------------ targets
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      host: https://dbc-b576ddfe-9e99.cloud.databricks.com
+      root_path: "/Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.target}/${bundle.name}"
+    variables:
+      schema: web_ingest_dev
+      warehouse_id: "REPLACE_WITH_DEV_WAREHOUSE_ID"
+
+  acc:
+    workspace:
+      host: https://dbc-b576ddfe-9e99.cloud.databricks.com
+      root_path: "/Shared/.bundle/${bundle.target}/${bundle.name}"
+    variables:
+      schema: web_ingest_acc
+      warehouse_id: "REPLACE_WITH_ACC_WAREHOUSE_ID"
+
+  prd:
+    workspace:
+      host: https://dbc-b576ddfe-9e99.cloud.databricks.com
+      root_path: "/Shared/.bundle/${bundle.target}/${bundle.name}"
+    variables:
+      schema: web_ingest
+      warehouse_id: "REPLACE_WITH_PRD_WAREHOUSE_ID"
+      schedule_pause_status: UNPAUSED

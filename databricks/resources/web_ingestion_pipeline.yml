@@ -1,0 +1,39 @@
+# Job 1 of 2: web ingestion.
+# search (Tavily) -> fetch -> parse -> clean -> chunk, then persist
+# chunks.jsonl/documents.jsonl into two Unity Catalog Delta tables.
+#
+# Creates the vector index source tables:
+#   ${var.catalog}.${var.schema}.${var.chunks_table}     (id, text, url, title, ...)
+#   ${var.catalog}.${var.schema}.${var.documents_table}  (doc_id, url, title, parser, metadata_json)
+# Job 2 (vector_index.yml) builds the embeddings index on top of chunks_table.
+
+resources:
+  jobs:
+    web-ingestion-pipeline:
+      name: web-ingestion-pipeline
+      description: "Search/Fetch/Parse/Clean/Chunk -> Delta tables (web_chunks, web_documents)"
+      schedule:
+        quartz_cron_expression: "0 0 */6 * * ?"
+        timezone_id: "UTC"
+        pause_status: "${var.schedule_pause_status}"
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "4"
+            dependencies:
+              - ../dist/*.whl
+              - databricks-vectorsearch==0.66
+      tasks:
+        - task_key: ingest_to_delta
+          environment_key: default
+          notebook_task:
+            notebook_path: ../notebooks/web_ingestion_pipeline.py
+            base_parameters:
+              query: "${var.query}"
+              parser: "${var.parser}"
+              max_results: "${var.max_results}"
+              catalog: "${var.catalog}"
+              schema: "${var.schema}"
+              databricks_host: "${workspace.host}"
+              databricks_warehouse_id: "${var.warehouse_id}"
+              tavily_api_key: "{{secrets/web-ingest/tavily_api_key}}"

@@ -1,0 +1,26 @@
+{
+  "query": "attention is all you need transformer architecture explained",
+  "results": [
+    {
+      "title": "Attention Is All You Need — paper explained",
+      "url": "https://example.com/blog/attention-is-all-you-need",
+      "score": 0.98,
+      "content": "A plain-English walkthrough of the Transformer: self-attention, multi-head attention, positional encoding and why recurrence disappeared.",
+      "fixture_path": "pages/attention-is-all-you-need.html"
+    },
+    {
+      "title": "Chunking strategies for RAG systems",
+      "url": "https://example.com/docs/rag-chunking",
+      "score": 0.91,
+      "content": "Fixed-size, sentence-aware and semantic chunking compared, with overlap guidance and evaluation tips for retrieval quality.",
+      "fixture_path": "pages/rag-chunking.html"
+    },
+    {
+      "title": "Building a web ingestion pipeline for RAG",
+      "url": "https://example.com/guides/web-ingestion-pipeline",
+      "score": 0.87,
+      "content": "Search, fetch, parse, clean, chunk: the five stages that turn arbitrary web pages into RAG-ready documents.",
+      "fixture_path": "pages/web-ingestion-pipeline.html"
+    }
+  ]
+}
