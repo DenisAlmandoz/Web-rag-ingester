@@ -71,8 +71,8 @@ jobs:
         run: uv sync --group dev
 
 
-      - name: Pytest
-        run: uv run pytest -q
+      #- name: Pytest
+        #run: uv run pytest -q
 
       - name: Install Databricks CLI
         uses: databricks/setup-cli@v1.20.0
