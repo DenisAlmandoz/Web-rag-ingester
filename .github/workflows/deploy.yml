@@ -77,7 +77,7 @@ jobs:
         run: uv run pytest -q
 
       - name: Install Databricks CLI
-        uses: databricks/setup-cli@v1
+        uses: databricks/setup-cli@v1.20.0
 
       - name: Bundle validate (dev)
         if: env.HAS_SP == 'true'
@@ -121,7 +121,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install Databricks CLI
-        uses: databricks/setup-cli@v1
+        uses: databricks/setup-cli@v1.20.0
 
       - name: Build and deploy bundle to ${{ matrix.target }}
         working-directory: src/databricks
