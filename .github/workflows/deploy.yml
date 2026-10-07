@@ -78,6 +78,26 @@ jobs:
 
       - name: Install Databricks CLI
         uses: databricks/setup-cli@v1.20.0
+        with:
+          version: 0.281.0
+
+      - name: Auth debug
+        if: env.HAS_SP == 'true'
+        working-directory: databricks
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+        run: |
+          mkdir -p ~/.databricks
+          cat > ~/.databrickscfg <<EOF
+          [DEFAULT]
+          host = ${DATABRICKS_HOST}
+          client_id = ${DATABRICKS_CLIENT_ID}
+          client_secret = ${DATABRICKS_CLIENT_SECRET}
+          EOF
+          databricks auth describe --profile DEFAULT
 
       - name: Bundle validate (dev)
         if: env.HAS_SP == 'true'
@@ -85,6 +105,7 @@ jobs:
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
         run: |
           mkdir -p ~/.databricks
@@ -130,12 +151,15 @@ jobs:
 
       - name: Install Databricks CLI
         uses: databricks/setup-cli@v1.20.0
+        with:
+          version: 0.281.0
 
       - name: Build and deploy bundle to ${{ matrix.target }}
         working-directory: databricks
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
         run: |
           mkdir -p ~/.databricks
@@ -153,6 +177,7 @@ jobs:
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
         run: |
           mkdir -p ~/.databricks
