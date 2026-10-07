@@ -5,7 +5,7 @@
 #   DATABRICKS_CLIENT_ID    service principal application id
 #   DATABRICKS_CLIENT_SECRET
 #
-# Bundle targets (src/databricks/databricks.yml) need real warehouse ids, and
+# Bundle targets (databricks/databricks.yml) need real warehouse ids, and
 # the deployed jobs read the Tavily key from the Databricks secret scope
 # `web-ingest` (key `tavily_api_key`).
 #
@@ -70,9 +70,11 @@ jobs:
       - name: Install package and dev dependencies
         run: uv sync --group dev
 
+      - name: Ruff
+        run: uv run ruff check src tests
 
-      #- name: Pytest
-        #run: uv run pytest -q
+      - name: Pytest
+        run: uv run pytest -q
 
       - name: Install Databricks CLI
         uses: databricks/setup-cli@v1.20.0
@@ -84,7 +86,15 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
-        run: databricks bundle validate --target dev
+        run: |
+          mkdir -p ~/.databricks
+          cat > ~/.databrickscfg <<EOF
+          [DEFAULT]
+          host = ${DATABRICKS_HOST}
+          client_id = ${DATABRICKS_CLIENT_ID}
+          client_secret = ${DATABRICKS_CLIENT_SECRET}
+          EOF
+          databricks bundle validate --target dev
 
   deploy:
     name: Deploy (${{ matrix.target }})
@@ -127,7 +137,15 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
-        run: databricks bundle deploy --target ${{ matrix.target }}
+        run: |
+          mkdir -p ~/.databricks
+          cat > ~/.databrickscfg <<EOF
+          [DEFAULT]
+          host = ${DATABRICKS_HOST}
+          client_id = ${DATABRICKS_CLIENT_ID}
+          client_secret = ${DATABRICKS_CLIENT_SECRET}
+          EOF
+          databricks bundle deploy --target ${{ matrix.target }}
 
       - name: Trigger web-ingestion-pipeline
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_pipeline_after_deploy == 'true'
@@ -136,4 +154,12 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
-        run: databricks bundle run --target ${{ matrix.target }} web-ingestion-pipeline --no-wait
+        run: |
+          mkdir -p ~/.databricks
+          cat > ~/.databrickscfg <<EOF
+          [DEFAULT]
+          host = ${DATABRICKS_HOST}
+          client_id = ${DATABRICKS_CLIENT_ID}
+          client_secret = ${DATABRICKS_CLIENT_SECRET}
+          EOF
+          databricks bundle run --target ${{ matrix.target }} web-ingestion-pipeline --no-wait
