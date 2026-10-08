@@ -24,14 +24,15 @@ include:
   - resources/web_ingestion_pipeline.yml
   - resources/vector_index.yml
 
-# Builds the project at the repo root (../ from this bundle) into a wheel at
-# the project's dist/. The CLI runs the build with cwd = artifact path and uploads
-# {path}/dist/*.whl; jobs reference it via ../dist/*.whl (relative to the bundle root).
+# Builds the project at the repo root into a wheel in this bundle's own dist/
+# (databricks/dist): the CLI runs the build with cwd = artifact path (the bundle
+# root), so `uv build ..` builds the parent repo root and --out-dir dist lands
+# next to databricks.yml, where the jobs' ../dist/*.whl glob resolves.
 artifacts:
   web-ingestion:
     type: whl
-    path: ../
-    build: "uv build --wheel --out-dir dist ."
+    path: .
+    build: "uv build --wheel --out-dir dist .."
 
 # ------------------------------------------------------------------ targets
 targets:
