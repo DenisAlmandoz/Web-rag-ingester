@@ -47,3 +47,29 @@ def test_oversized_paragraph_is_split():
     chunks = make_chunks(huge, chunk_size=200, overlap=40)
     assert len(chunks) > 5
     assert all(c.char_count <= 200 for c in chunks)
+
+
+def test_sentence_boundaries_are_never_cut():
+    sentence = "First sentence here. "
+    chunks = make_chunks(sentence * 100, chunk_size=200, overlap=40)
+    assert len(chunks) > 5
+    for chunk in chunks:
+        body = chunk.text.split("\n\n", 1)[1] if "\n\n" in chunk.text else chunk.text
+        assert (len(body) + 1) % len(sentence) == 0
+
+
+def test_chunks_are_self_contained_with_title_heading():
+    chunks = make_chunks("First. Second. Third. " * 30, chunk_size=200, overlap=40)
+    assert len(chunks) > 1
+    assert all(c.text.startswith("# T\n\n") for c in chunks)
+
+
+def test_long_single_sentence_splits_on_words():
+    run_on = " ".join(f"token{index:03d}" for index in range(300))
+    chunks = make_chunks(run_on, chunk_size=200, overlap=40)
+    assert len(chunks) > 3
+    assert all(c.char_count <= 200 for c in chunks)
+    for chunk in chunks:
+        body = chunk.text.split("\n\n", 1)[1] if "\n\n" in chunk.text else chunk.text
+        words = [w for w in body.split() if w and w != "token"]
+        assert all(w in run_on.split() for w in words)

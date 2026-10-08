@@ -24,7 +24,7 @@ jobs.
                         └──────┬──────┘
                                ▼
                         ┌─────────────┐
-   clean text ────────▶ │   CHUNK     │  paragraph-aware windows + overlap → JSONL
+   clean text ────────▶ │   CHUNK     │  sentence-aware windows + overlap, title-prefixed → JSONL
                         └──────┬──────┘
                                ▼
                         documents.jsonl + chunks.jsonl  (ready to embed/index)
@@ -161,8 +161,9 @@ manage the vector search endpoint.
     report.md                    human-readable summary
 ```
 
-`output_dir` defaults to `data` locally and `/local_disk0/web-ingestion` inside the
-pipeline job, so job nodes never depend on a shared FS.
+`output_dir` defaults to `data` locally and to the system temp dir
+(`$TMPDIR/web-ingestion`, typically `/local_disk0/tmp/web-ingestion` on cluster nodes)
+inside the pipeline job, so job nodes never depend on a shared FS.
 
 ## Testing / lint
 

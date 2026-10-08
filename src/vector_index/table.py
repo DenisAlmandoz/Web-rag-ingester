@@ -149,14 +149,21 @@ def _chunk_values_row(row: dict[str, Any], ingest_ts: str) -> str:
     )
 
 
+def _select_values_rows(columns: tuple[str, ...], values: str) -> str:
+    """Named columns from a VALUES block: Databricks disallows a column alias
+    list on VALUES used directly in a MERGE source (COLUMN_ALIASES_NOT_ALLOWED),
+    so alias the implicit colN names in a wrapping SELECT instead."""
+    aliases = ",\n    ".join(f"col{i + 1} AS {col}" for i, col in enumerate(columns))
+    return f"  SELECT\n    {aliases}\n  FROM (VALUES\n    {values}\n  ) AS v"
+
+
 def merge_statement(settings: Settings, rows: list[dict[str, Any]], ingest_ts: str) -> str:
     values = ",\n    ".join(_chunk_values_row(row, ingest_ts) for row in rows)
     return (
         f"MERGE INTO {qualified_table(settings)} AS target\n"
         "USING (\n"
-        "  SELECT * FROM VALUES\n"
-        f"    {values}\n"
-        f") AS source ({', '.join(CHUNK_COLUMNS)})\n"
+        f"{_select_values_rows(CHUNK_COLUMNS, values)}\n"
+        ") AS source\n"
         "ON target.id = source.id\n"
         "WHEN MATCHED THEN UPDATE SET doc_id = source.doc_id, url = source.url, title = source.title, "
         "chunk_index = source.chunk_index, text = source.text, char_count = source.char_count, "
@@ -180,9 +187,8 @@ def documents_merge_statement(settings: Settings, rows: list[dict[str, Any]], in
     return (
         f"MERGE INTO {qualified_documents_table(settings)} AS target\n"
         "USING (\n"
-        "  SELECT * FROM VALUES\n"
-        f"    {values}\n"
-        f") AS source ({', '.join(DOCUMENT_COLUMNS)})\n"
+        f"{_select_values_rows(DOCUMENT_COLUMNS, values)}\n"
+        ") AS source\n"
         "ON target.doc_id = source.doc_id\n"
         "WHEN MATCHED THEN UPDATE SET url = source.url, title = source.title, parser = source.parser, "
         "raw_chars = source.raw_chars, cleaned_chars = source.cleaned_chars, chunk_count = source.chunk_count, "
@@ -229,14 +235,17 @@ class _DeltaTable:
         response = self._client().statement_execution.execute_statement(
             warehouse_id=self.warehouse_id,
             statement=statement,
-            wait_timeout="60s",
+            wait_timeout="50s",
             on_wait_timeout=ExecuteStatementRequestOnWaitTimeout.CANCEL,
             disposition=Disposition.INLINE,
         )
         status = response.status
         state = getattr(status.state, "name", str(status.state))
         if state != "SUCCEEDED":
-            raise RuntimeError(f"statement {state}: {status.error or 'no detail'} (sql_state={status.sql_state})")
+            error = getattr(status, "error", None)
+            message = getattr(error, "message", None) or getattr(error, "owner", None) or "no detail"
+            sql_state = getattr(error, "sql_state", "") or ""
+            raise RuntimeError(f"statement {state}: {message} (sql_state={sql_state})")
         return response
 
     def ensure(self) -> None:

@@ -44,7 +44,7 @@ targets:
       root_path: "/Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.target}/${bundle.name}"
     variables:
       schema: web_ingest_dev
-      warehouse_id: "REPLACE_WITH_DEV_WAREHOUSE_ID"
+      warehouse_id: 42be771719f14826
 
   acc:
     workspace:
@@ -52,7 +52,7 @@ targets:
       root_path: "/Shared/.bundle/${bundle.target}/${bundle.name}"
     variables:
       schema: web_ingest_acc
-      warehouse_id: "REPLACE_WITH_ACC_WAREHOUSE_ID"
+      warehouse_id: 42be771719f14826
 
   prd:
     workspace:
@@ -60,5 +60,5 @@ targets:
       root_path: "/Shared/.bundle/${bundle.target}/${bundle.name}"
     variables:
       schema: web_ingest
-      warehouse_id: "REPLACE_WITH_PRD_WAREHOUSE_ID"
+      warehouse_id: 42be771719f14826
       schedule_pause_status: UNPAUSED

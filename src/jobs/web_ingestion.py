@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,7 +26,7 @@ from .widgets import widget
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "/local_disk0/web-ingestion"
+DEFAULT_OUTPUT_DIR = Path(tempfile.gettempdir()) / "web-ingestion"
 
 
 class WebIngestionConfig(BaseModel):
@@ -39,7 +40,7 @@ class WebIngestionConfig(BaseModel):
     databricks_host: str = ""
     databricks_warehouse_id: str = ""
     tavily_api_key: str = ""
-    output_dir: Path = Path(DEFAULT_OUTPUT_DIR)
+    output_dir: Path = DEFAULT_OUTPUT_DIR
 
     @classmethod
     def from_widgets(cls) -> WebIngestionConfig:
