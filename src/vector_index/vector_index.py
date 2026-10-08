@@ -2,8 +2,9 @@
 
 Ported from `oreilly-mlops-with-databricks/llmops/src/arxiv_curator/vector_search.py`:
 endpoint exists-guard -> create, index exists-guard -> create_delta_sync_index,
-then `sync()`. Embeddings are computed server-side by the Delta Sync pipeline
-from `embedding_source_column`, so nothing embeds locally.
+wait until the index finished provisioning, then `sync()`. Embeddings are
+computed server-side by the Delta Sync pipeline from `embedding_source_column`,
+so nothing embeds locally.
 """
 
 from __future__ import annotations
@@ -74,8 +75,14 @@ class VectorSearchManager:
         )
 
     def sync_index(self, *, wait: bool = False) -> Any:
-        """Bring the index up to date with the source table (then optionally block)."""
+        """Bring the index up to date with the source table (then optionally block).
+
+        A freshly-created delta-sync index starts in PROVISIONING; wait until it is
+        ONLINE so the first sync() call never races the provisioning step.
+        """
         index = self.create_or_get_index()
+        logger.info("Waiting for vector search index to be ready: %s", self.index_name)
+        index.wait_until_ready()
         logger.info("Syncing vector search index: %s", self.index_name)
         index.sync()
         if wait:

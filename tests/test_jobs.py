@@ -217,4 +217,4 @@ def test_vector_index_run_extracts_and_syncs_index():
     assert kwargs["embedding_model_endpoint_name"] == "databricks-gte-large-en"
 
     assert index.synced == 1
-    assert index.waited_with == [{"wait_for_updates": True}]
+    assert index.waited_with == [{}, {"wait_for_updates": True}]

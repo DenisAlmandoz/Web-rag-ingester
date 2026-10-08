@@ -256,7 +256,7 @@ def test_manager_creates_endpoint_and_index():
     assert kwargs["pipeline_type"] == "TRIGGERED"
     assert kwargs["source_table_name"] == "main.web_ingest.web_chunks"
     assert index.synced == 1
-    assert index.waited_with == []
+    assert index.waited_with == [{}]
 
 
 def test_manager_reuses_existing_index_and_waits():
@@ -268,4 +268,4 @@ def test_manager_reuses_existing_index_and_waits():
     assert vsc.endpoint_creates == []
     assert vsc.index_creates == []
     assert vsc.index.synced == 1
-    assert vsc.index.waited_with == [{"wait_for_updates": True}]
+    assert vsc.index.waited_with == [{}, {"wait_for_updates": True}]
