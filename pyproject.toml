@@ -22,21 +22,17 @@ databricks = [
     "databricks-sdk>=0.102",
 ]
 
-[project.scripts]
-web-ingest = "web_ingestion.cli:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/web_ingestion"]
+packages = ["src/web_ingestion", "src/jobs", "src/vector_index"]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.6.0",
-    "jupyter>=1.1.1",
 ]
 
 [tool.ruff]

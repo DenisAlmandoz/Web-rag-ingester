@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     output_dir: Path = DATA_DIR
 
-    # Databricks (only needed for `web-ingest index`)
+    # Databricks (used by the vector-index job and both jobs' writes/syncs)
     databricks_host: str = ""
     databricks_client_id: str = ""
     databricks_client_secret: str = ""

@@ -2,7 +2,9 @@
 
 A hands-on companion to `production-agentic-rag-course`: instead of ingesting arXiv
 preprints, this project retrieves **arbitrary web content** via the [Tavily API](https://tavily.com)
-and runs it through a transformation chain that makes it RAG-ready.
+and runs it through a transformation chain that makes it RAG-ready. Deployment is a
+pair of [Databricks Declarative Automation](https://docs.databricks.com/en/dev-tools/bundles/index.html)
+jobs.
 
 ```
                         ┌─────────────┐
@@ -28,34 +30,56 @@ and runs it through a transformation chain that makes it RAG-ready.
                         documents.jsonl + chunks.jsonl  (ready to embed/index)
 ```
 
-## Quickstart (no API key needed)
+## The two jobs
+
+The bundle (`databricks/`) stages one wheel (`src/web_ingestion`) and wires two jobs:
+
+1. **`web-ingestion-pipeline`** — the ETL above. Runs `WebIngestion`:
+   `extract` (Tavily search + fetch), `transform` (parse/clean/chunk), `load`
+   (write `documents.jsonl` + `chunks.jsonl` into Delta tables via SQL warehouse).
+   Widgets: `query`, `parser`, `max_results`, `catalog`, `schema`, `databricks_host`,
+   `databricks_warehouse_id`, `tavily_api_key`.
+2. **`web-ingest-vector-index`** — the indexing half. Runs `VectorIndex`:
+   reads the chunks table produced by job 1 and syncs it to a managed
+   [Databricks Vector Search](https://docs.databricks.com/en/vector-search/index.html)
+   index with server-side embeddings. Widgets: `catalog`, `schema`, `chunks_table`,
+   `documents_table`, `vs_endpoint_name`, `vs_index_name`, `embedding_model`,
+   `databricks_host`, `databricks_warehouse_id`.
+
+Entry points are two lines deep: `WebIngestion(WebIngestionConfig.from_widgets()).run()` /
+`VectorIndex(VectorIndexConfig.from_widgets()).run()` (classes in `src/jobs/`, pushed to
+Databricks via the wheel bundle: `web_ingestion` + `jobs` + `vector_index` packages).
+
+## Deploy / run
+
+Prereqs per target in [`databricks/databricks.yml`](databricks/databricks.yml):
+a running SQL warehouse id, a secret scope `web-ingest` with key `tavily_api_key`,
+and a serving endpoint `databricks-gte-large-en`.
 
 ```bash
-uv sync --group dev        # core pipeline + dev tools (lightweight)
-uv sync --extra trafilatura --extra unstructured   # optional parsers (recommended)
-make demo                  # offline end-to-end run over bundled fixture pages
-make compare               # baseline vs trafilatura vs unstructured side-by-side
-make test                  # pytest suite
+uv sync --group dev               # local test/lint tooling
+make install-parsers              # choose parsers for the job env (see below)
+make install-databricks           # databricks-sdk for jobs/ + the lint/test extras
+
+make bundle-validate TARGET=dev   # reads project_name/version from pyproject.toml
+make bundle-deploy TARGET=dev
+databricks bundle run web-ingestion-pipeline --target dev --refresh-all       # job 1
+databricks bundle run web-ingest-vector-index --target dev --refresh-all      # job 2
 ```
 
-`demo` fetches fixture HTML pages from `fixtures/pages/`, runs baseline parsing,
-cleans and chunks them, and writes a full run under `data/runs/<timestamp>/`.
+Off-cluster, the job classes read the same settings from `.env` (see
+`web_ingestion/config.py`); on Databricks they take overrides from the job widgets,
+so the bundle variables are the source of truth in production.
 
-## Going live with Tavily
+Bundle variables `project_name` and `project_version` are sourced from
+`pyproject.toml` (`[project].name` / `[project].version`): the Makefile targets
+`make bundle-validate` / `make bundle-deploy` read them, and CI exports
+`BUNDLE_VAR_PROJECT_VERSION` before `databricks bundle *` (DAB resolution order:
+`--var` > `BUNDLE_VAR_*` env var > target/variable defaults). The version is propagated into
+the two job descriptions so the deployed jobs self-report which package version
+they run.
 
-1. Get a free key at https://app.tavily.com
-2. `cp .env.example .env`, then put the key in `.env`
-3. `make run "your query"` — or:
-
-```bash
-uv run web-ingest run "what is self-attention" --parser trafilatura
-```
-
-With a key set, search hits the real Tavily `/search` endpoint; without one, the
-pipeline replays `fixtures/search_results.json` offline (see `--mock_mode` in
-`web_ingestion/config.py`).
-
-## Comparing parsers
+## Choosing parsers
 
 Parsers live behind a lazy adapter interface (`web_ingestion/parsers/`), so the core
 install runs fast and heavier parsers are opt-in:
@@ -67,9 +91,10 @@ install runs fast and heavier parsers are opt-in:
 | `unstructured`| PDF + HTML   | `make install-unstructured` (spaCy model downloaded on first use) |
 | `docling`     | PDF + HTML   | `make install-docling` — Linux/Docker or macOS 14+ |
 
-Install all usable parsers on this machine with `make install-parsers`. Do **not**
-run `uv sync --extra <one>` repeatedly to add parsers: uv replaces extras on each
-sync, so pass them together (the Makefile targets handle this).
+A parser is selected per run via the pipeline job's `parser` widget. Install all
+usable parsers on this machine with `make install-parsers`. Do **not** run
+`uv sync --extra <one>` repeatedly to add parsers: uv replaces extras on each sync,
+so pass them together (the Makefile targets handle this).
 
 > **Why no docling here?** Docling pulls in `torch` and `docling-parse` (a C++
 > extension). Current torch releases ship macOS 14+ arm64 wheels only, and
@@ -78,24 +103,21 @@ sync, so pass them together (the Makefile targets handle this).
 > container. The `DoclingParser` adapter in this repo mirrors that container's
 > `src/services/pdf_parser/docling.py`; on Linux/macOS 14+ just `make install-docling`.
 
-Compare every installed parser on one page:
+## Going live with Tavily
 
-```bash
-make compare
-# or against a live URL:
-uv run web-ingest compare https://en.wikipedia.org/wiki/Retrieval-augmented_generation
-```
+1. Get a free key at https://app.tavily.com
+2. Put it in `.env` locally, or in the `web-ingest` secret scope as `tavily_api_key` for the bundle targets.
+3. When running the pipeline job, ensure the `tavily_api_key` widget is populated.
 
-The diff (char counts before/after cleaning, structure items, parse time, preview) is
-written to `data/comparisons/<slug>.md`. The notebook
-`notebooks/01_parser_comparison.ipynb` walks through the same comparison
-interactively and shows raw vs cleaned text side by side.
+With a key set, search hits the real Tavily `/search` endpoint; without one, the
+pipeline replays `fixtures/search_results.json` offline (see `--mock_mode` in
+`web_ingestion/config.py`).
 
-## Pushing chunks into a Databricks Vector Index
+## Databricks Vector Index
 
-`web-ingest index` hands `chunks.jsonl` (plus `documents.jsonl`) off to Databricks
-so retrieval can happen against a managed vector index. The pattern mirrors the
-arxiv curator in `oreilly-mlops-with-databricks`:
+The vector-index job hands the chunk table from job 1 to Databricks so retrieval can
+happen against a managed vector index. The pattern mirrors the arxiv curator in
+`oreilly-mlops-with-databricks`:
 
 ```
 documents.jsonl ─┐
@@ -114,32 +136,10 @@ plus `url`, `title`, `doc_id`, `chunk_index`, `char_count`, `approx_tokens`,
 `parser`, `raw_chars`, `cleaned_chars`, `chunk_count`, `metadata_json`) joined to
 the chunks on `doc_id`.
 
-1. Install the SDK: `make install-databricks`
-2. Fill in the `--- Databricks ---` block in `.env`:
-
-```bash
-DATABRICKS_HOST="https://xxxxxxxx.cloud.databricks.com"
-DATABRICKS_CLIENT_ID=""            # service principal (CI/CD style auth)
-DATABRICKS_CLIENT_SECRET=""
-DATABRICKS_WAREHOUSE_ID=""         # SQL warehouse used to write the table
-```
-
-Leave the SPN pair empty to fall back to ambient auth (Databricks CLI / VS Code
-extension / `~/.databrickscfg`).
-
-3. Run it:
-
-```bash
-uv run web-ingest index --dry-run      # show plan, no calls
-uv run web-ingest index                # write table + create index + sync
-uv run web-ingest index --wait         # ...and block until the index is ready
-uv run web-ingest index --run 20261007-144442   # a specific run
-uv run web-ingest index --no-sync      # table only
-```
-
 Everything is guarded, so re-runs are safe: `CREATE SCHEMA/TABLE IF NOT EXISTS`,
-Change Data Feed enabled via `ALTER TABLE`, `MERGE` on `id`, and exists-checks on
-the endpoint/index before `create_delta_sync_index` + `sync()`.
+Change Data Feed enabled via `ALTER TABLE`, `MERGE` on `id`/`doc_id`, `query()`
+to re-read chunk rows, and exists-checks on the endpoint/index before
+`create_delta_sync_index` + `sync()`.
 
 > **Embeddings are generated by Databricks**, from the `text` column — nothing
 > embeds locally, and the Delta Sync pipeline owns index freshness. The table is
@@ -152,7 +152,7 @@ manage the vector search endpoint.
 ## Output layout of one run
 
 ```
-data/runs/<timestamp>/
+<output_dir>/runs/<timestamp>/
     search_results.json          what the provider returned
     raw/<slug>.html              untouched payloads (reproducibility)
     parsed/<parser>/<slug>.json  parser output before cleaning
@@ -161,25 +161,20 @@ data/runs/<timestamp>/
     report.md                    human-readable summary
 ```
 
-## CLI
-
-```
-web-ingest parsers                     list installed parsers
-web-ingest search "query"              print Tavily/mock results
-web-ingest run "query" [--parser X]    full pipeline
-web-ingest run --urls URL1 URL2 ...    skip search, ingest URLs directly
-web-ingest compare URL [--fixture p]   parser side-by-side
-web-ingest demo                        offline run over fixtures
-web-ingest index [--dry-run|--no-sync|--wait]   push chunks to a Databricks vector index
-```
+`output_dir` defaults to `data` locally and `/local_disk0/web-ingestion` inside the
+pipeline job, so job nodes never depend on a shared FS.
 
 ## Testing / lint
 
 ```bash
+make setup      # uv sync --group dev
 make test       # pytest (offline, no network)
 make lint       # ruff check
 make format     # ruff format
 ```
 
 Tests in `tests/` exercise cleaning rules, chunk boundaries/overlap, mock search,
-baseline extraction and the full pipeline in mock mode — no API key or network needed.
+baseline extraction, the full pipeline in mock mode, the job classes, and the
+Databricks table/vector-index statements — no API key or network needed. Local tests
+must not use the real `.env` key: the `tavily_api_key` setting is overridden (empty
+string) in the fixtures.

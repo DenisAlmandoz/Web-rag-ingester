@@ -1,14 +1,15 @@
 # Job 2 of 2: push chunks to a vector index with embeddings.
 #
-# Delta Sync index over the chunks table: Databricks computes embeddings
-# server-side from the `text` column (embedding_model) during sync, so no
-# embedding work happens in the job. Run after web-ingestion-pipeline.
+# extract reads the chunks table via the SQL warehouse, load runs the
+# Delta Sync index sync: Databricks computes embeddings server-side from
+# the `text` column (embedding_model) during sync, so no embedding work
+# happens in the job. Run after web-ingestion-pipeline.
 
 resources:
   jobs:
     web-ingest-vector-index:
       name: web-ingest-vector-index
-      description: "Create/sync the delta-sync vector index (server-side embeddings) over web_chunks"
+      description: "{{var.project_name}} {{var.project_version}} — create/sync the delta-sync vector index (server-side embeddings) over web_chunks"
       schedule:
         quartz_cron_expression: "0 30 */6 * * ?"
         timezone_id: "UTC"
@@ -33,3 +34,5 @@ resources:
               vs_endpoint_name: "${var.vs_endpoint_name}"
               vs_index_name: "${var.vs_index_name}"
               embedding_model: "${var.embedding_model}"
+              databricks_host: "${workspace.host}"
+              databricks_warehouse_id: "${var.warehouse_id}"

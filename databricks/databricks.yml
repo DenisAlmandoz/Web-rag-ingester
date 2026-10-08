@@ -24,13 +24,14 @@ include:
   - resources/web_ingestion_pipeline.yml
   - resources/vector_index.yml
 
-# Builds src/web_ingestion into a wheel into this bundle's dist/.
-# Jobs reference it as ../dist/*.whl from resources/*.yml.
+# Builds the project at the repo root (../ from this bundle) into a wheel at
+# the project's dist/. The CLI runs the build with cwd = artifact path and uploads
+# {path}/dist/*.whl; jobs reference it via ../dist/*.whl (relative to the bundle root).
 artifacts:
   web-ingestion:
     type: whl
-    path: ../..
-    build: "uv build --wheel --out-dir src/databricks/dist ."
+    path: ../
+    build: "uv build --wheel --out-dir dist ."
 
 # ------------------------------------------------------------------ targets
 targets:

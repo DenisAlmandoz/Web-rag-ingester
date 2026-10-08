@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
 import pytest
-from web_ingestion.databricks.table import (
+
+from vector_index.table import (
     MERGE_BATCH_SIZE,
     ChunksTable,
     DocumentsTable,
@@ -11,13 +12,9 @@ from web_ingestion.databricks.table import (
     load_chunks,
     load_documents,
     merge_statement,
-    resolve_chunks_file,
     sql_quote,
 )
-from web_ingestion.databricks.vector_index import VectorSearchManager, qualified_index
-
-from web_ingestion import config as config_module
-from web_ingestion.cli import main
+from vector_index.vector_index import VectorSearchManager, qualified_index
 from web_ingestion.config import Settings
 
 
@@ -96,21 +93,6 @@ def _dbx_settings(**overrides) -> Settings:
     }
     defaults.update(overrides)
     return Settings(tavily_api_key="", **defaults)
-
-
-def _write_chunks(tmp_path, count=2, run_id="20261007-120000"):
-    run_dir = tmp_path / "runs" / run_id / "processed"
-    run_dir.mkdir(parents=True)
-    lines = [
-        (
-            f'{{"id": "doc-{i}::0", "doc_id": "doc-{i}", "url": "https://x/{i}", "title": "T", '
-            f'"index": 0, "text": "body {i}", "char_count": 6, "approx_tokens": 2}}'
-        )
-        for i in range(count)
-    ]
-    path = run_dir / "chunks.jsonl"
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return path
 
 
 def _write_documents(tmp_path, count=2, run_id="20261007-120000"):
@@ -246,26 +228,6 @@ def test_failed_statement_raises(tmp_path):
         table.ensure()
 
 
-def test_resolve_chunks_file_prefers_explicit_path(tmp_path):
-    path = _write_chunks(tmp_path)
-    assert resolve_chunks_file(_settings(tmp_path), chunks_path=str(path)) == path
-    assert resolve_chunks_file(_settings(tmp_path), run_id="20261007-120000") == path
-
-
-def test_resolve_chunks_file_picks_latest_run(tmp_path):
-    old = _write_chunks(tmp_path, run_id="20261007-010101")
-    new = _write_chunks(tmp_path, run_id="20261007-235959")
-    assert resolve_chunks_file(_settings(tmp_path)) == new
-    assert old != new
-
-
-def test_resolve_chunks_file_missing(tmp_path):
-    with pytest.raises(FileNotFoundError):
-        resolve_chunks_file(_settings(tmp_path))
-    with pytest.raises(FileNotFoundError):
-        resolve_chunks_file(_settings(tmp_path), chunks_path=str(tmp_path / "nope.jsonl"))
-
-
 def test_load_chunks_rejects_rows_without_text(tmp_path):
     path = tmp_path / "chunks.jsonl"
     path.write_text('{"id": "a"}\n', encoding="utf-8")
@@ -307,32 +269,3 @@ def test_manager_reuses_existing_index_and_waits():
     assert vsc.index_creates == []
     assert vsc.index.synced == 1
     assert vsc.index.waited_with == [{"wait_for_updates": True}]
-
-
-def test_cli_index_dry_run_makes_no_databricks_calls(tmp_path, monkeypatch, capsys):
-    path = _write_chunks(tmp_path)
-    monkeypatch.setattr(config_module, "_settings", _settings(tmp_path))
-
-    def _explode(*args, **kwargs):
-        raise AssertionError("Databricks must not be touched in --dry-run")
-
-    monkeypatch.setattr("web_ingestion.cli.ChunksTable", _explode)
-    monkeypatch.setattr("web_ingestion.cli.VectorSearchManager", _explode)
-
-    code = main(["index", "--chunks", str(path), "--dry-run"])
-
-    out = capsys.readouterr().out
-    assert code == 0
-    assert "dry run" in out
-    assert "main.web_ingest.web_chunks" in out
-    assert "main.web_ingest.web_documents" in out
-
-
-def test_cli_index_requires_databricks_config(tmp_path, monkeypatch, capsys):
-    path = _write_chunks(tmp_path)
-    monkeypatch.setattr(config_module, "_settings", _settings(tmp_path))
-
-    code = main(["index", "--chunks", str(path)])
-
-    assert code == 1
-    assert "DATABRICKS_HOST" in capsys.readouterr().err

@@ -10,7 +10,6 @@ Output layout per run:
         report.md                    human-readable summary
 """
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -20,7 +19,7 @@ from pathlib import Path
 from .config import Settings, get_settings
 from .fetch import HttpFetcher, save_raw
 from .models import Chunk, DocumentRecord, FetchedDocument, ParsedDocument, SearchResponse, SearchResult
-from .parsers import available_parsers, get_parser, timed_parse
+from .parsers import get_parser, timed_parse
 from .search import get_search_client
 from .transform import chunk_text, clean_text, dedupe_lines
 
@@ -170,55 +169,3 @@ def _write_outputs(result: RunResult) -> None:
         lines += ["", "## Errors", ""] + [f"- {e}" for e in result.errors]
 
     (result.run_dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def compare_parsers(url: str, *, settings: Settings | None = None, fixture_path: str | None = None) -> dict:
-    """Parse the same document with every installed parser and diff the output."""
-    settings = settings or get_settings()
-    fetcher = HttpFetcher(settings)
-    doc = fetcher.fetch(url, fixture_path=fixture_path)
-
-    comparison: dict = {"url": url, "parsers": {}}
-    for name, installed in available_parsers().items():
-        if not installed:
-            comparison["parsers"][name] = {"installed": False}
-            continue
-        parser = get_parser(name)
-        parsed = timed_parse(parser, doc)
-        cleaned = clean_text(parsed.text)
-        comparison["parsers"][name] = {
-            "installed": True,
-            "raw_chars": len(parsed.text),
-            "cleaned_chars": len(cleaned),
-            "title": parsed.title,
-            "structure": len(parsed.structure),
-            "metadata": parsed.metadata,
-            "warnings": parsed.warnings,
-            "parse_seconds": round(parsed.parse_seconds, 3),
-            "preview": cleaned[:1200],
-        }
-    return comparison
-
-
-def write_comparison(comparison: dict, out_path: Path) -> Path:
-    lines = [f"# Parser comparison: {comparison['url']}", ""]
-    for name, info in comparison["parsers"].items():
-        lines.append(f"## {name}")
-        if not info.get("installed"):
-            from .parsers import unavailable_reason
-
-            lines.append(f"- not installed ({unavailable_reason(name)})")
-        else:
-            lines.append(f"- raw chars: {info['raw_chars']}")
-            lines.append(f"- cleaned chars: {info['cleaned_chars']}")
-            lines.append(f"- structure items: {info['structure']}")
-            lines.append(f"- parse seconds: {info['parse_seconds']}")
-            lines.append(f"- title: {info['title']}")
-            lines.append(f"- metadata: {json.dumps(info['metadata'], default=str)[:400]}")
-            if info["warnings"]:
-                lines.append(f"- warnings: {info['warnings']}")
-            lines += ["", "```text", info["preview"], "```"]
-        lines.append("")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(lines), encoding="utf-8")
-    return out_path

@@ -1,6 +1,6 @@
-.PHONY: help setup sync test lint format run demo compare parsers \
+.PHONY: help setup sync test lint format clean \
         install-trafilatura install-unstructured install-docling install-parsers \
-        install-databricks index clean
+        install-databricks bundle-validate bundle-deploy
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -30,8 +30,15 @@ install-parsers: ## Everything except docling
 install-databricks: ## Databricks vector search SDK (keeps the other extras)
 	uv sync --extra trafilatura --extra unstructured --extra databricks
 
-index: ## Push the latest chunks.jsonl to the Databricks vector index
-	uv run web-ingest index
+PROJECT_VERSION := $(shell uv run python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])" 2>/dev/null)
+
+bundle-validate: ## Validate the DAB bundle (TARGET=dev|acc|prd, default dev)
+	@export BUNDLE_VAR_PROJECT_VERSION="$(PROJECT_VERSION)" && \
+		cd databricks && databricks bundle validate --target "$${TARGET:-dev}"
+
+bundle-deploy: ## Deploy the DAB bundle (TARGET=dev|acc|prd, default dev)
+	@export BUNDLE_VAR_PROJECT_VERSION="$(PROJECT_VERSION)" && \
+		cd databricks && databricks bundle deploy --target "$${TARGET:-dev}"
 
 test: ## Run tests
 	uv run pytest -q
@@ -41,24 +48,6 @@ lint: ## Run ruff checks
 
 format: ## Auto-format with ruff
 	uv run ruff format src tests
-
-run: ## Full pipeline on default query (offline unless TAVILY_API_KEY set)
-	uv run web-ingest run "attention is all you need transformer architecture explained"
-
-demo: ## Offline end-to-end demo on bundled fixtures
-	uv run web-ingest demo
-
-search: ## Tavily search: make search 'your query'
-	uv run web-ingest search
-
-compare: ## Parse one fixture page with every installed parser
-	uv run web-ingest compare attention-is-all-you-need --fixture pages/attention-is-all-you-need.html
-
-parsers: ## Show which parsers are installed
-	uv run web-ingest parsers
-
-notebook: ## Launch jupyter lab
-	uv run jupyter lab notebooks
 
 clean: ## Remove test artifacts and caches
 	rm -rf .pytest_cache .ruff_cache data/runs

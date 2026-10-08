@@ -2,6 +2,15 @@
 # Targets in databricks.yml override catalog/schema/warehouse_id per environment.
 
 variables:
+  project_name:
+    description: Project name as declared in pyproject.toml [project].name.
+    default: web-search-ingestion
+  project_version:
+    description: >-
+      Version as declared in pyproject.toml [project].version. Override at deploy time via the
+      BUNDLE_VAR_PROJECT_VERSION environment variable (exported from pyproject.toml by
+      `make bundle-validate` / `make bundle-deploy` and CI). Resolution: --var > BUNDLE_VAR_* > default.
+    default: 0.1.0
   catalog:
     description: Unity Catalog catalog that owns the ingestion tables.
     default: main

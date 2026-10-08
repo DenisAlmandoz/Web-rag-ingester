@@ -11,7 +11,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ..config import Settings, get_settings
+from web_ingestion.config import Settings, get_settings
+
 from .client import configure_env
 
 logger = logging.getLogger(__name__)

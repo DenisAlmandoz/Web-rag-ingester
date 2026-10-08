@@ -18,7 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ..config import Settings, get_settings
+from web_ingestion.config import Settings, get_settings
+
 from .client import workspace_client
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,7 @@ def load_chunks(path: Path) -> list[dict[str, Any]]:
 
 def load_documents(path: Path) -> list[dict[str, Any]]:
     """Read documents.jsonl and add the `doc_id` the chunks table is keyed on."""
-    from ..pipeline import slugify
+    from web_ingestion.pipeline import slugify
 
     rows = _read_jsonl(path)
     for offset, row in enumerate(rows, start=1):
@@ -88,45 +89,6 @@ def load_documents(path: Path) -> list[dict[str, Any]]:
         row["chunk_count"] = len(row.get("chunks") or [])
         row["metadata_json"] = json.dumps(row.get("metadata") or {}, ensure_ascii=False, default=str)
     return rows
-
-
-def resolve_run_file(
-    settings: Settings | None = None,
-    *,
-    filename: str,
-    run_id: str | None = None,
-    explicit_path: str | None = None,
-) -> Path:
-    """Pick a processed/<filename> file: explicit path > explicit run > latest run."""
-    settings = settings or get_settings()
-
-    if explicit_path:
-        path = Path(explicit_path)
-        if not path.exists():
-            raise FileNotFoundError(f"{filename} not found: {path}")
-        return path
-
-    runs_dir = Path(settings.output_dir) / "runs"
-
-    if run_id:
-        path = runs_dir / run_id / "processed" / filename
-        if not path.exists():
-            raise FileNotFoundError(f"no {filename} for run {run_id}: {path}")
-        return path
-
-    candidates = sorted(runs_dir.glob(f"*/processed/{filename}"))
-    if not candidates:
-        raise FileNotFoundError(f"no {filename} under {runs_dir}; run `web-ingest run` first")
-    return candidates[-1]
-
-
-def resolve_chunks_file(
-    settings: Settings | None = None,
-    *,
-    run_id: str | None = None,
-    chunks_path: str | None = None,
-) -> Path:
-    return resolve_run_file(settings, filename="chunks.jsonl", run_id=run_id, explicit_path=chunks_path)
 
 
 def sql_quote(value: Any) -> str:
@@ -249,6 +211,18 @@ class _DeltaTable:
         return self.client
 
     def execute(self, statement: str) -> None:
+        self._execute(statement)
+
+    def query(self, statement: str) -> list[dict[str, Any]]:
+        """Run a SELECT and return one dict per row (inline disposition)."""
+        response = self._execute(statement)
+        result = getattr(response, "result", None)
+        manifest = getattr(result, "manifest", None)
+        columns = [column.name for column in (getattr(manifest, "schema", None) or [])]
+        data = getattr(result, "data_array", None) or []
+        return [dict(zip(columns, values)) for values in data]
+
+    def _execute(self, statement: str) -> Any:
         from databricks.sdk.service.sql import Disposition, ExecuteStatementRequestOnWaitTimeout
 
         logger.debug("SQL: %s", statement[:200].replace("\n", " "))
@@ -263,6 +237,7 @@ class _DeltaTable:
         state = getattr(status.state, "name", str(status.state))
         if state != "SUCCEEDED":
             raise RuntimeError(f"statement {state}: {status.error or 'no detail'} (sql_state={status.sql_state})")
+        return response
 
     def ensure(self) -> None:
         """Schema + table + Change Data Feed, all guarded so re-runs are safe."""

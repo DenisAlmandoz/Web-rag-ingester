@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from ..web_ingestion.config import Settings
+from web_ingestion.config import Settings
 
 
 def configure_env(settings: Settings) -> None:

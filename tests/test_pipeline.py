@@ -1,5 +1,5 @@
 from web_ingestion.config import Settings
-from web_ingestion.pipeline import compare_parsers, run_pipeline
+from web_ingestion.pipeline import run_pipeline
 
 
 def test_full_pipeline_mock_mode(tmp_path):
@@ -45,12 +45,6 @@ def test_pipeline_accepts_explicit_urls(tmp_path):
     )
     assert len(result.records) == 1
     assert "Fixed-size windows" in " ".join(c.text for c in result.records[0].chunks)
-
-
-def test_compare_parsers_offline(tmp_path):
-    comparison = compare_parsers("attention-is-all-you-need", fixture_path="pages/attention-is-all-you-need.html")
-    assert comparison["parsers"]["baseline"]["installed"]
-    assert comparison["parsers"]["baseline"]["cleaned_chars"] > 0
 
 
 def test_pipeline_does_not_require_network(tmp_path):
